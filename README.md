@@ -7,7 +7,7 @@ This is a gradle plugin to upload a artifact directory to maven central Reposito
 * `build.gradle.kts`
 ```kotlin
 plugins {
-    id("io.github.jeadyx.sonatype-uploader") version '1.0'
+    id("io.github.jeadyx.sonatype-uploader") version "1.0"
 }
 
 sonatypeUploader {
