@@ -15,7 +15,7 @@ gradlePlugin {
             implementationClass = "com.jeady.sonatypeuploader.UploaderPlugin"
             displayName = "Sonatype Uploader"
             description = "Upload your maven artifact to Sonatype repo"
-            tags.set(listOf("sonatype", "uploader", "maven", "plugin"))
+            tags.set(listOf("sonatype", "uploader", "maven"))
         }
     }
 }
