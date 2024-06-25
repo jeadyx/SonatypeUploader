@@ -89,6 +89,9 @@ To do this:
 3. before publish, you need the artifact status is `VALIDATED`  
 4. bundle file name is "`bundleName`.zip"
 
+# Sample
+[SonatypeUploaderSample Project](https://github.com/jeadyx/SonatypeUploaderSample)
+
 # Reference  
 This plugin is referenced from [Publishing By Using the Portal Publisher API](https://central.sonatype.org/publish/publish-portal-api/)
 
