@@ -1,4 +1,4 @@
-package com.jeady.sonatypeuploader
+package io.github.jeadyx
 
 import com.google.gson.Gson
 import java.io.File
@@ -46,7 +46,7 @@ object Utils {
                 throw RuntimeException("Failed to upload file. Response code: $responseCode ${connection.responseMessage}")
             }
         }else{
-            throw FileNotFoundException(filePath)
+            throw FileNotFoundException("Upload for $filePath")
 
         }
     }
@@ -170,13 +170,13 @@ object Utils {
         }
     }
     fun getAuthToken(extension: UploaderExtension): String {
-        val authName = extension.tokenName.orNull ?: run {
+        val authName = extension.tokenName ?: run {
             throw IllegalStateException("property tokenPasswd is null")
         }
-        val authPassword = extension.tokenPasswd.orNull ?: run {
+        val authPassword = extension.tokenPasswd ?: run {
             throw IllegalStateException("property tokenPasswd is null")
         }
-        val authToken = Utils.encodeBase64(authName, authPassword)
+        val authToken = encodeBase64(authName, authPassword)
         return authToken
     }
     // 将username:password进行base64编码
