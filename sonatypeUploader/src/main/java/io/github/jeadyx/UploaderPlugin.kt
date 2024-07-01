@@ -20,7 +20,6 @@ class UploaderPlugin : Plugin<Project> {
         val extension = project.extensions.create("sonatypeUploader", UploaderExtension::class.java)
         val tempRepo = project.layout.buildDirectory.dir("sonayUploader")
         val hasDokkaPlugin = project.plugins.hasPlugin("org.jetbrains.dokka")
-        println("${LocalDateTime.now()} Apply Plugin")
         if(hasDokkaPlugin){
             project.tasks.register("dokkaJavadocJar", Jar::class.java) {
                 it.description = "generate javadoc, kotlin as java doc"
@@ -61,8 +60,8 @@ class UploaderPlugin : Plugin<Project> {
         val oneKeyUploadTask = project.task("publishToSonatype"){
             it.group = "sonatypeUploader"
             it.description = "一键发布到sonatype"
-            it.dependsOn("0.test bundle dir")
-            it.dependsOn ("1.upload deployment dir")
+            it.dependsOn("0.testDeploymentDir")
+            it.dependsOn ("1.uploadDeploymentDir")
             it.doLast {
                 println("Maven has upload completed.")
                 println("Checking maven validate status.")
@@ -91,7 +90,7 @@ class UploaderPlugin : Plugin<Project> {
                         }
                     }else if(status == "PUBLISHING"){
                         timesPublishing++
-                        if(timesPublishing > 10){
+                        if(timesPublishing > 3){
                             println("[Result] Artifact is publishing, please exec task: `check deployment status` manually after some minutes.")
                             break
                         }
@@ -112,22 +111,28 @@ class UploaderPlugin : Plugin<Project> {
                 }
             }
         }
-        val bundleTask = project.task("0.test bundle dir"){ it ->
+        val cleanTask = project.tasks.register("cleanLocalDeploymentDir"){
             it.group = "sonatypeUploader"
-            it.description = "组合为sonatype可接受的目录树"
-            val sonaUploaderDir = tempRepo.get().asFile
-            if(sonaUploaderDir.exists()){
-                sonaUploaderDir.deleteRecursively()
-            }
-            it.dependsOn("configureMavenPom")
-            it.dependsOn("assemble", "publishMavenJavaPublicationToSonayUploaderRepository")
-            it.doLast{
-                println("Done bundle to path: ${tempRepo.get().asFile.path}")
+            it.description = "清理sonatype上传目录"
+            it.doLast {
+                val sonaUploaderDir = tempRepo.get().asFile
+                if(sonaUploaderDir.exists()){
+                    sonaUploaderDir.deleteRecursively()
+                }
             }
         }
-        bundleTask.shouldRunAfter(configureMavenTask)
+        val bundleTask = project.task("0.testDeploymentDir"){ it ->
+            it.group = "sonatypeUploader"
+            it.description = "组合为sonatype可接受的目录树"
+            it.dependsOn("configureMavenPom", "cleanLocalDeploymentDir")
+            it.dependsOn("assemble", "publishMavenJavaPublicationToSonayUploaderRepository")
+            it.doLast{
+                println("Created to path: ${tempRepo.get().asFile.path}")
+            }
+        }
+        bundleTask.shouldRunAfter(cleanTask, configureMavenTask)
         oneKeyUploadTask.mustRunAfter(bundleTask)
-        project.task("1.upload deployment dir") {
+        project.task("1.uploadDeploymentDir") {
             it.group = "sonatypeUploader"
             it.description = "上传组合好的目录到sonatype"
             it.doLast {
@@ -156,7 +161,7 @@ class UploaderPlugin : Plugin<Project> {
                 }
             }
         }
-        project.task("2.check deployment status") {
+        project.task("2.checkDeploymentStatus") {
             it.group = "sonatypeUploader"
             it.description = "获取deployment状态"
             it.doLast {
@@ -168,11 +173,11 @@ class UploaderPlugin : Plugin<Project> {
                     val authToken = Utils.getAuthToken(extension)
                     Utils.checkUploadStatus(url, authToken)
                 }?:run{
-                    println("You need to upload firstly")
+                    throw RuntimeException("You need to upload firstly")
                 }
             }
         }
-        project.task("3.publish deployment") {
+        project.task("3.publishDeployment") {
             it.group = "sonatypeUploader"
             it.description = "发布合法的deployment"
             it.doLast {
@@ -183,11 +188,11 @@ class UploaderPlugin : Plugin<Project> {
                     val authToken = Utils.getAuthToken(extension)
                     Utils.publishDeployment(url, authToken)
                 }?:run{
-                    println("You need to upload firstly")
+                    throw RuntimeException("You need to upload firstly")
                 }
             }
         }
-        project.task("3.delete deployment") {
+        project.task("3.deleteDeployment") {
             it.group = "sonatypeUploader"
             it.description = "删除deployment"
             it.doLast {
@@ -198,7 +203,7 @@ class UploaderPlugin : Plugin<Project> {
                     val authToken = Utils.getAuthToken(extension)
                     Utils.deleteDeployment(url, authToken)
                 }?:run{
-                    println("You need to upload firstly")
+                    throw RuntimeException("You need to upload firstly")
                 }
             }
         }
