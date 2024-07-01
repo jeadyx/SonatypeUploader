@@ -6,9 +6,9 @@ This is a gradle plugin to upload a artifact directory to maven central Reposito
 
 * `build.gradle.kts`
 ```kotlin
-plugins { 
+plugins {
+    id("org.jetbrains.dokka") version "1.9.20" // kotlin to javadoc; can be commented
     id("io.github.jeadyx.sonatype-uploader") version "2.0"
-    id("org.jetbrains.dokka") version "1.9.20"
 }
 
 group = "io.github.jeady5"

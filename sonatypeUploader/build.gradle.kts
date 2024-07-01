@@ -6,7 +6,7 @@ plugins {
     id("org.jetbrains.dokka") version "1.9.20" apply false
 }
 group = "io.github.jeadyx"
-version = "2.0"
+version = "2.1"
 gradlePlugin {
     website.set("https://github.com/jeadyx/SonatypeUploader")
     vcsUrl.set("https://github.com/jeadyx/SonatypeUploader")
@@ -14,8 +14,8 @@ gradlePlugin {
         create("sonatype uploader") {
             id = "io.github.jeadyx.sonatype-uploader"
             implementationClass = "io.github.jeadyx.UploaderPlugin"
-            displayName = "Sonatype Uploader"
-            description = "Upload your maven artifact to Sonatype repo"
+            displayName = "Sonatype Uploader and Publisher"
+            description = "Publish your maven artifact to Sonatype repo"
             tags.set(listOf("sonatype", "uploader", "maven"))
         }
     }
