@@ -72,7 +72,7 @@ class UploaderPlugin : Plugin<Project> {
                         authToken
                     )
                     println("Check status: $status")
-                    if((status != "PENDING") && (status != "PUBLISHING")) {
+                    if(!status.endsWith("ING")) {
                         if (status == "VALIDATED") {
                             println("Artifact is validated")
                             println("Invoke publish api")
