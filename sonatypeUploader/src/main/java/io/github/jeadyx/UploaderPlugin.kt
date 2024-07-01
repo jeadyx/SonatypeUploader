@@ -76,10 +76,10 @@ class UploaderPlugin : Plugin<Project> {
                         if (status == "VALIDATED") {
                             println("Artifact is validated")
                             println("Invoke publish api")
-//                            Utils.publishDeployment(
-//                                "https://central.sonatype.com/api/v1/publisher/deployment/$uid",
-//                                authToken
-//                            )
+                            Utils.publishDeployment(
+                                "https://central.sonatype.com/api/v1/publisher/deployment/$uid",
+                                authToken
+                            )
                         }else if(status == "PUBLISHED"){
                             println("[Result] Congratulations! Your artifact has been published.")
                             break
