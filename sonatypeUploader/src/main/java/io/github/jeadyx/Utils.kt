@@ -69,7 +69,7 @@ object Utils {
             // 将response 解析成json对象，然后根据uid获取上传状态
             val jsonObject = Gson().fromJson(response, Deployment::class.java)
             val status = jsonObject.deploymentState
-            print("[Result] Deployment status: $status")
+            println("[Result] Deployment status: $status")
             return status
         } else {
             throw RuntimeException("Failed to check upload status. Response code: $responseCode ${connection.responseMessage}")
@@ -88,7 +88,7 @@ object Utils {
         connection.setRequestProperty("Authorization", "Bearer $authToken")
         val responseCode = connection.responseCode
         if (responseCode == HttpURLConnection.HTTP_NO_CONTENT) {
-            println("[Result] Publish deployment success.")
+            println("[Result] Publish artifact invoke success.")
         } else {
             throw RuntimeException("Failed to publish deployment. Response code: $responseCode ${connection.responseMessage}")
         }

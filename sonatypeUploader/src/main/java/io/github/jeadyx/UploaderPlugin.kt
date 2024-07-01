@@ -12,6 +12,7 @@ import org.gradle.plugins.signing.SigningPlugin
 import java.io.File
 import java.io.FileNotFoundException
 import java.lang.RuntimeException
+import java.time.LocalDateTime
 
 
 class UploaderPlugin : Plugin<Project> {
@@ -19,6 +20,7 @@ class UploaderPlugin : Plugin<Project> {
         val extension = project.extensions.create("sonatypeUploader", UploaderExtension::class.java)
         val tempRepo = project.layout.buildDirectory.dir("sonayUploader")
         val hasDokkaPlugin = project.plugins.hasPlugin("org.jetbrains.dokka")
+        println("${LocalDateTime.now()} Apply Plugin")
         if(hasDokkaPlugin){
             project.tasks.register("dokkaJavadocJar", Jar::class.java) {
                 it.description = "generate javadoc, kotlin as java doc"
@@ -66,12 +68,13 @@ class UploaderPlugin : Plugin<Project> {
                 println("Checking maven validate status.")
                 val authToken = Utils.getAuthToken(extension)
                 val uid = Utils.readFile("${project.layout.buildDirectory.get().asFile.absolutePath}/sonayUploader/uploaderId")
+                var timesPublishing = 0
                 do {
                     val status = Utils.checkUploadStatus(
                         "https://central.sonatype.com/api/v1/publisher/status?id=$uid",
                         authToken
                     )
-                    println("Check status: $status")
+                    println("${LocalDateTime.now()} Check status: $status")
                     if(!status.endsWith("ING")) {
                         if (status == "VALIDATED") {
                             println("Artifact is validated")
@@ -85,6 +88,12 @@ class UploaderPlugin : Plugin<Project> {
                             break
                         }else{
                             throw RuntimeException("[Result] Validate fail causing by $status\nFor detail: https://central.sonatype.com/publishing/deployments")
+                        }
+                    }else if(status == "PUBLISHING"){
+                        timesPublishing++
+                        if(timesPublishing > 10){
+                            println("[Result] Artifact is publishing, please exec task: `check deployment status` manually after some minutes.")
+                            break
                         }
                     }
                     Thread.sleep(3000)
@@ -106,6 +115,10 @@ class UploaderPlugin : Plugin<Project> {
         val bundleTask = project.task("0.test bundle dir"){ it ->
             it.group = "sonatypeUploader"
             it.description = "组合为sonatype可接受的目录树"
+            val sonaUploaderDir = tempRepo.get().asFile
+            if(sonaUploaderDir.exists()){
+                sonaUploaderDir.deleteRecursively()
+            }
             it.dependsOn("configureMavenPom")
             it.dependsOn("assemble", "publishMavenJavaPublicationToSonayUploaderRepository")
             it.doLast{
