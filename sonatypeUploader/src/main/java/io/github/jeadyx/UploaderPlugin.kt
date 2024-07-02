@@ -43,7 +43,8 @@ class UploaderPlugin : Plugin<Project> {
                 }
             }
         }
-        if(!project.plugins.hasPlugin(SigningPlugin::class.java)){
+        val signingConfigured = project.plugins.hasPlugin(SigningPlugin::class.java)
+        if(!signingConfigured){
             project.plugins.apply(SigningPlugin::class.java)
             project.extensions.configure(SigningExtension::class.java){
                 it.sign(project.extensions.getByType(PublishingExtension::class.java).publications)
@@ -102,6 +103,17 @@ class UploaderPlugin : Plugin<Project> {
         }
         val configureMavenTask = project.task("configureMavenPom"){
             it.doLast {
+                project.extensions.configure(SigningExtension::class.java) {
+                    extension.signing?.let { info ->
+                        val signInfo = UploaderSigning("", "", "")
+                        info.execute(signInfo)
+                        project.extensions.extraProperties["signing.keyId"] = signInfo.keyId
+                        project.extensions.extraProperties["signing.password"] =
+                            signInfo.keyPasswd
+                        project.extensions.extraProperties["signing.secretKeyRingFile"] =
+                            signInfo.secretKeyPath
+                    }
+                }
                 extension.pom?.let {pom->
                     project.extensions.configure(PublishingExtension::class.java) {
                         it.publications.named("mavenJava", MavenPublication::class.java).configure {publication->

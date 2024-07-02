@@ -6,12 +6,12 @@ plugins {
     id("org.jetbrains.dokka") version "1.9.20" apply false
 }
 group = "io.github.jeadyx"
-version = "2.3"
+version = "2.4"
 gradlePlugin {
     website.set("https://github.com/jeadyx/SonatypeUploader")
     vcsUrl.set("https://github.com/jeadyx/SonatypeUploader")
     plugins {
-        create("sonatype uploader") {
+        create("sonatypeUploader") {
             id = "io.github.jeadyx.sonatype-uploader"
             implementationClass = "io.github.jeadyx.UploaderPlugin"
             displayName = "Sonatype Uploader and Publisher"

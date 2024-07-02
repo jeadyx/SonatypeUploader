@@ -28,4 +28,15 @@ interface UploaderExtension {
      * 要生成的pom文件信息
      */
     var pom: Action<MavenPom>?
+
+    /**
+     * 用于签名的信息
+     */
+    var signing: Action<UploaderSigning>?
 }
+
+data class UploaderSigning(
+    var keyId: String,
+    var keyPasswd: String,
+    var secretKeyPath: String
+)
