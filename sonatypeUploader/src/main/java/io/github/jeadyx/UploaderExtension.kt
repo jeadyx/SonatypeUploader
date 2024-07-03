@@ -10,9 +10,9 @@ interface UploaderExtension {
     var bundleName: String?
 
     /**
-     * 如果只使用上传功能，该参数用于指定要上传工件的root路径，如E:\\repo\\io
+     * 如果只使用上传功能，该参数用于指定要上传工件的本地仓库地址，如E:\\repo
      */
-    var artifactRoot: String?
+    var repositoryPath: String?
 
     /**
      * sonatype 上生成的token username

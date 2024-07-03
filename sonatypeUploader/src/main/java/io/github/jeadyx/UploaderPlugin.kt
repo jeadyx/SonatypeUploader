@@ -2,24 +2,31 @@ package io.github.jeadyx
 
 import org.gradle.api.Plugin
 import org.gradle.api.Project
+import org.gradle.api.artifacts.repositories.MavenArtifactRepository
+import org.gradle.api.file.Directory
 import org.gradle.api.plugins.JavaPluginExtension
 import org.gradle.api.publish.PublishingExtension
 import org.gradle.api.publish.maven.MavenPublication
 import org.gradle.api.publish.maven.plugins.MavenPublishPlugin
 import org.gradle.api.tasks.bundling.Jar
+import org.gradle.internal.impldep.bsh.commands.dir
 import org.gradle.plugins.signing.SigningExtension
 import org.gradle.plugins.signing.SigningPlugin
 import java.io.File
 import java.io.FileNotFoundException
 import java.lang.RuntimeException
+import java.security.Provider
 import java.time.LocalDateTime
 
 
 class UploaderPlugin : Plugin<Project> {
     override fun apply(project: Project) {
         val extension = project.extensions.create("sonatypeUploader", UploaderExtension::class.java)
-        val tempRepo = project.layout.buildDirectory.dir("sonayUploader")
+        var tempRepo = project.layout.buildDirectory.dir("sonayUploader").get().asFile.path
         val hasDokkaPlugin = project.plugins.hasPlugin("org.jetbrains.dokka")
+        val hasMavenPublishPlugin = project.plugins.hasPlugin(MavenPublishPlugin::class.java)
+        val hasSigningPlugin = project.plugins.hasPlugin(SigningPlugin::class.java)
+        val configuredManually = hasMavenPublishPlugin && hasSigningPlugin
         if(hasDokkaPlugin){
             project.tasks.register("dokkaJavadocJar", Jar::class.java) {
                 it.description = "generate javadoc, kotlin as java doc"
@@ -28,7 +35,7 @@ class UploaderPlugin : Plugin<Project> {
                 it.archiveClassifier.set("javadoc")
             }
         }
-        if(!project.plugins.hasPlugin(MavenPublishPlugin::class.java)){
+        if(!hasMavenPublishPlugin){
             project.plugins.apply(MavenPublishPlugin::class.java)
             project.extensions.configure(PublishingExtension::class.java){
                 it.publications.create("mavenJava", MavenPublication::class.java){
@@ -43,8 +50,7 @@ class UploaderPlugin : Plugin<Project> {
                 }
             }
         }
-        val signingConfigured = project.plugins.hasPlugin(SigningPlugin::class.java)
-        if(!signingConfigured){
+        if(!hasSigningPlugin){
             project.plugins.apply(SigningPlugin::class.java)
             project.extensions.configure(SigningExtension::class.java){
                 it.sign(project.extensions.getByType(PublishingExtension::class.java).publications)
@@ -61,14 +67,15 @@ class UploaderPlugin : Plugin<Project> {
         val oneKeyUploadTask = project.task("publishToSonatype"){
             it.group = "sonatypeUploader"
             it.description = "一键发布到sonatype"
-            it.dependsOn("0.testDeploymentDir")
-            it.dependsOn ("1.uploadDeploymentDir")
+            if(!configuredManually) {
+                it.dependsOn("1.createDeploymentDir")
+            }
+            it.dependsOn("2.uploadDeploymentDir")
             it.doLast {
                 println("Maven has upload completed.")
                 println("Checking maven validate status.")
                 val authToken = Utils.getAuthToken(extension)
                 val uid = Utils.readFile("${project.layout.buildDirectory.get().asFile.absolutePath}/sonayUploader/uploaderId")
-                var timesPublishing = 0
                 do {
                     val status = Utils.checkUploadStatus(
                         "https://central.sonatype.com/api/v1/publisher/status?id=$uid",
@@ -89,78 +96,47 @@ class UploaderPlugin : Plugin<Project> {
                         }else{
                             throw RuntimeException("[Result] Validate fail causing by $status\nFor detail: https://central.sonatype.com/publishing/deployments")
                         }
-                    }else if(status == "PUBLISHING"){
-                        timesPublishing++
-                        if(timesPublishing > 3){
-                            println("[Result] Artifact is publishing, please exec task: `check deployment status` manually after some minutes.")
-                            break
-                        }
+                    } else if(status == "PUBLISHING"){
+                        println("[Result] The artifact is PUBLISHING, you can exec task `checkDeploymentStatus` to check publish status after few minutes.")
+                        break
+                    }else {
+                        Thread.sleep(3000)
                     }
-                    Thread.sleep(3000)
                 }while (true)
-
             }
         }
-        val configureMavenTask = project.task("configureMavenPom"){
-            it.doLast {
-                project.extensions.configure(SigningExtension::class.java) {
-                    extension.signing?.let { info ->
-                        val signInfo = UploaderSigning("", "", "")
-                        info.execute(signInfo)
-                        project.extensions.extraProperties["signing.keyId"] = signInfo.keyId
-                        project.extensions.extraProperties["signing.password"] =
-                            signInfo.keyPasswd
-                        project.extensions.extraProperties["signing.secretKeyRingFile"] =
-                            signInfo.secretKeyPath
-                    }
-                }
-                extension.pom?.let {pom->
-                    project.extensions.configure(PublishingExtension::class.java) {
-                        it.publications.named("mavenJava", MavenPublication::class.java).configure {publication->
-                            pom.execute(publication.pom)
-                        }
-                    }
-                }
+        project.task("2.uploadDeploymentDir") {
+            if(!configuredManually) {
+                it.group = "sonatypeUploader"
+                it.dependsOn("1.createDeploymentDir")
             }
-        }
-        val cleanTask = project.tasks.register("cleanLocalDeploymentDir"){
-            it.group = "sonatypeUploader"
-            it.description = "清理sonatype上传目录"
-            it.doLast {
-                val sonaUploaderDir = tempRepo.get().asFile
-                if(sonaUploaderDir.exists()){
-                    sonaUploaderDir.deleteRecursively()
-                }
-            }
-        }
-        val bundleTask = project.task("0.testDeploymentDir"){ it ->
-            it.group = "sonatypeUploader"
-            it.description = "组合为sonatype可接受的目录树"
-            it.dependsOn("configureMavenPom", "cleanLocalDeploymentDir")
-            it.dependsOn("assemble", "publishMavenJavaPublicationToSonayUploaderRepository")
-            it.doLast{
-                println("Created to path: ${tempRepo.get().asFile.path}")
-            }
-        }
-        bundleTask.shouldRunAfter(cleanTask, configureMavenTask)
-        oneKeyUploadTask.mustRunAfter(bundleTask)
-        project.task("1.uploadDeploymentDir") {
-            it.group = "sonatypeUploader"
             it.description = "上传组合好的目录到sonatype"
             it.doLast {
-                val packageRootDir = project.group.toString().split(".")[0]
                 val bundleName = extension.bundleName?:"${project.name}-${project.version?:"release"}"
-                val dir = File(extension.artifactRoot?:"${tempRepo.get().asFile.path}/$packageRootDir")
+                val dir = File(
+                    if(configuredManually){
+                        extension.repositoryPath?.let{
+                            extension.repositoryPath
+                        }?: run {
+                            throw RuntimeException("Your publication repository is not configured. Try add property `repositoryPath` to `sonatypeUploader`.")
+                        }
+                    }else{
+                        tempRepo
+//                        extension.repositoryPath?.let{
+//                            extension.repositoryPath
+//                        }?: run{
+//                            tempRepo
+//                        }
+                    }
+                )
                 if (dir.exists()) {
-                    println("Zip artifact files to $dir")
-                    val zipFilePath =
-                        "${tempRepo.get().asFile.path}/$bundleName.zip"
+                    val zipFilePath = project.layout.buildDirectory.dir("sonayUploader/$bundleName.zip").get().asFile.path
                     if (!File(File(zipFilePath).parent).isDirectory) {
                         File(File(zipFilePath).parent).mkdirs()
                     } else if (File(zipFilePath).exists()) {
                         File(zipFilePath).delete()
                     }
-                    Utils.zipFolder(dir.absolutePath, zipFilePath)
+                    Utils.zipFolder(dir.path, zipFilePath, project.group.toString().replace(".", "/"))
                     println("dir has been zipped to $zipFilePath")
                     println("upload zip file to sonatype")
                     val url = "https://central.sonatype.com/api/v1/publisher/upload"
@@ -169,42 +145,84 @@ class UploaderPlugin : Plugin<Project> {
                     System.setProperty("uploaderId", uid)
                     Utils.writeToFile("${File(zipFilePath).parent}/uploaderId", uid)
                 } else {
-                    throw FileNotFoundException("$dir")
+                    throw FileNotFoundException("The artifact dir not found: $dir")
                 }
             }
         }
-        project.task("2.checkDeploymentStatus") {
-            it.group = "sonatypeUploader"
-            it.description = "获取deployment状态"
-            it.doLast {
-                val uid =
-                    Utils.readFile("${project.layout.buildDirectory.get().asFile.absolutePath}/sonayUploader/uploaderId")
-                uid?.let {
-                    println("checking deployment status")
-                    val url = "https://central.sonatype.com/api/v1/publisher/status?id=$uid"
-                    val authToken = Utils.getAuthToken(extension)
-                    Utils.checkUploadStatus(url, authToken)
-                }?:run{
-                    throw RuntimeException("You need to upload firstly")
+        if(!configuredManually) {
+            val configureUploaderTask = project.task("configureUploader"){
+                it.doLast {
+                    extension.repositoryPath?.let{root->
+                        val fileRepo = File(root)
+                        if(!fileRepo.exists()){
+                            if(!fileRepo.mkdirs()){
+                                throw RuntimeException("[Result] Directory create Failed for $root")
+                            }
+                        }
+                        tempRepo = root
+                    }
+                    project.extensions.configure(SigningExtension::class.java) {
+                        extension.signing?.let { info ->
+                            val signInfo = UploaderSigning("", "", "")
+                            info.execute(signInfo)
+                            project.extensions.extraProperties["signing.keyId"] = signInfo.keyId
+                            project.extensions.extraProperties["signing.password"] =
+                                signInfo.keyPasswd
+                            project.extensions.extraProperties["signing.secretKeyRingFile"] =
+                                signInfo.secretKeyPath
+                        }
+                    }
+                    project.extensions.configure(PublishingExtension::class.java) {
+                        extension.pom?.let { pom ->
+                            it.publications.named("mavenJava", MavenPublication::class.java)
+                                .configure { publication ->
+                                    pom.execute(publication.pom)
+                                }
+                        }
+                        it.repositories.named("sonayUploader", MavenArtifactRepository::class.java) {
+                            it.url = project.uri(tempRepo)
+                        }
+                    }
+                }
+            }
+            val cleanTask = project.tasks.register("cleanLocalDeploymentDir"){
+                it.group = "sonatypeUploader"
+                it.description = "清理sonatype上传目录"
+                it.doLast {
+                    val sonaUploaderDir = File(tempRepo)
+                    if(sonaUploaderDir.exists()){
+                        sonaUploaderDir.deleteRecursively()
+                    }
+                }
+            }
+            val bundleTask = project.task("1.createDeploymentDir"){ it ->
+                it.group = "sonatypeUploader"
+                it.description = "组合为sonatype可接受的目录树"
+                it.dependsOn("configureUploader", "cleanLocalDeploymentDir")
+                it.dependsOn("assemble", "publishMavenJavaPublicationToSonayUploaderRepository")
+                it.doLast{
+                    println("Created to path: $tempRepo")
+                }
+            }
+            bundleTask.shouldRunAfter(cleanTask, configureUploaderTask)
+            oneKeyUploadTask.mustRunAfter(bundleTask)
+            project.task("3.publishDeployment") {
+                it.group = "sonatypeUploader"
+                it.description = "发布合法的deployment"
+                it.doLast {
+                    val uid =
+                        Utils.readFile("${project.layout.buildDirectory.get().asFile.absolutePath}/sonayUploader/uploaderId")
+                    uid?.let {
+                        val url = "https://central.sonatype.com/api/v1/publisher/deployment/$uid"
+                        val authToken = Utils.getAuthToken(extension)
+                        Utils.publishDeployment(url, authToken)
+                    } ?: run {
+                        throw RuntimeException("You need to upload firstly")
+                    }
                 }
             }
         }
-        project.task("3.publishDeployment") {
-            it.group = "sonatypeUploader"
-            it.description = "发布合法的deployment"
-            it.doLast {
-                val uid =
-                    Utils.readFile("${project.layout.buildDirectory.get().asFile.absolutePath}/sonayUploader/uploaderId")
-                uid?.let{
-                    val url = "https://central.sonatype.com/api/v1/publisher/deployment/$uid"
-                    val authToken = Utils.getAuthToken(extension)
-                    Utils.publishDeployment(url, authToken)
-                }?:run{
-                    throw RuntimeException("You need to upload firstly")
-                }
-            }
-        }
-        project.task("3.deleteDeployment") {
+        project.task("deleteDeployment") {
             it.group = "sonatypeUploader"
             it.description = "删除deployment"
             it.doLast {
@@ -214,7 +232,26 @@ class UploaderPlugin : Plugin<Project> {
                     val url = "https://central.sonatype.com/api/v1/publisher/deployment/$uid"
                     val authToken = Utils.getAuthToken(extension)
                     Utils.deleteDeployment(url, authToken)
-                }?:run{
+                } ?: run {
+                    throw RuntimeException("You need to upload firstly")
+                }
+            }
+        }
+        project.task("checkDeploymentStatus") {
+            it.group = "sonatypeUploader"
+            it.description = "获取deployment状态"
+            it.doLast {
+                val uid =
+                    Utils.readFile("${project.layout.buildDirectory.get().asFile.absolutePath}/sonayUploader/uploaderId")
+                uid?.let {
+                    println("checking deployment status")
+                    val url = "https://central.sonatype.com/api/v1/publisher/status?id=$uid"
+                    val authToken = Utils.getAuthToken(extension)
+                    val status = Utils.checkUploadStatus(url, authToken)
+                    if(!status.endsWith("ING") && !status.endsWith("ED")){
+                        throw RuntimeException("[Result] Status $status\nFor detail: https://central.sonatype.com/publishing/deployments")
+                    }
+                } ?: run {
                     throw RuntimeException("You need to upload firstly")
                 }
             }

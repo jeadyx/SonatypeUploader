@@ -113,14 +113,19 @@ object Utils {
         }
     }
 
-    fun zipFolder(folderPath: String, zipFilePath: String) {
+    fun zipFolder(folderPath: String, zipFilePath: String, baseZipDir: String="") {
         val zipFile = File(zipFilePath)
+        println("zip file $folderPath $zipFilePath $baseZipDir")
         if (zipFile.exists()) {
             zipFile.delete()
         }
         val zipOutputStream = ZipOutputStream(java.io.FileOutputStream(zipFile))
-        val file = File(folderPath)
+        val file = File("${folderPath}/${baseZipDir}")
+        if(!file.exists()){
+            throw FileNotFoundException("The folder not found: ${file.path}")
+        }
         val rootDir = let{
+            if(baseZipDir.isNotBlank()) return@let baseZipDir
             if(file.isDirectory){
                 return@let file.name
             }else{
@@ -128,17 +133,17 @@ object Utils {
             }
         }
         file.listFiles()?.forEach {
-            zipFile(it.absolutePath, zipOutputStream, rootDir)
+            zipFolder(it.absolutePath, zipOutputStream, rootDir)
         }
         zipOutputStream.closeEntry()
         zipOutputStream.close()
     }
-    private fun zipFile(filePath: String, zipOutputStream: ZipOutputStream, baseZipDir: String) {
+    private fun zipFolder(filePath: String, zipOutputStream: ZipOutputStream, baseZipDir: String) {
         val file = File(filePath)
         if (file.isDirectory) {
             val dirZip = "$baseZipDir/${file.name}"
             file.listFiles()?.forEach {
-                zipFile(it.absolutePath, zipOutputStream, dirZip)
+                zipFolder(it.absolutePath, zipOutputStream, dirZip)
             }
         }
         else {
