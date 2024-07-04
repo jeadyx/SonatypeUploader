@@ -1,6 +1,7 @@
 package io.github.jeadyx
 
 import com.google.gson.Gson
+import com.google.gson.JsonParser
 import java.io.File
 import java.io.FileNotFoundException
 import java.io.InputStream
@@ -50,7 +51,6 @@ object Utils {
 
         }
     }
-
     /**
      * $ curl --request POST \
      *   --verbose \
@@ -67,10 +67,16 @@ object Utils {
         if (responseCode == HttpURLConnection.HTTP_OK) {
             val response = connection.inputStream.bufferedReader().use { it.readText() }
             // 将response 解析成json对象，然后根据uid获取上传状态
-            val jsonObject = Gson().fromJson(response, Deployment::class.java)
-            val status = jsonObject.deploymentState
-            println("[Result] Deployment status: $status")
-            return status
+            val jsonObject = JsonParser.parseString(response).asJsonObject
+            // PENDING, VALIDATING, VALIDATED, PUBLISHING, PUBLISHED, FAILED
+            val status = jsonObject.get("deploymentState").asString
+            println("[Result] Deployment status1: $status")
+            if(status == "FAILED"){
+                val errors = decodeUnicodeEscapes(Gson().toJson(jsonObject.get("errors")))
+                throw RuntimeException("Validate FAILED\nCausing by: $errors")
+            }else{
+                return status
+            }
         } else {
             throw RuntimeException("Failed to check upload status. Response code: $responseCode ${connection.responseMessage}")
         }
@@ -115,7 +121,7 @@ object Utils {
 
     fun zipFolder(folderPath: String, zipFilePath: String, baseZipDir: String="") {
         val zipFile = File(zipFilePath)
-        println("zip file $folderPath $zipFilePath $baseZipDir")
+        println("Zip artifact")
         if (zipFile.exists()) {
             zipFile.delete()
         }
@@ -166,6 +172,13 @@ object Utils {
         file.createNewFile()
         file.writeText(content)
     }
+    fun appendToFile(filePath: String, content: String){
+        val file = File(filePath)
+        if(!file.parentFile.exists()){
+            file.parentFile.mkdirs()
+        }
+        file.appendText(content + "\n")
+    }
     fun readFile(filePath: String): String? {
         val file = File(filePath)
         return if (file.exists()) {
@@ -204,5 +217,17 @@ data class Deployment(
     val deploymentId: String,
     val deploymentName: String,
     val deploymentState: String,
-    val purls: List<String>
+    val purls: List<String>,
+    val errors : String
 )
+
+fun decodeUnicodeEscapes(input: String): String {
+    // 匹配\u后跟四个十六进制数字的Unicode转义序列
+    val unicodePattern = Regex("""\\u([0-9a-fA-F]{4})""")
+    return unicodePattern.replace(input) { matchResult ->
+        // 将匹配的十六进制数字转换为字符
+        val code = matchResult.groupValues[1].toInt(16)
+        // 将Unicode码点转换为字符
+        String(Character.toChars(code))
+    }
+}

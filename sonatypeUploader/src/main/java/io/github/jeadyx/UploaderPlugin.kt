@@ -3,19 +3,15 @@ package io.github.jeadyx
 import org.gradle.api.Plugin
 import org.gradle.api.Project
 import org.gradle.api.artifacts.repositories.MavenArtifactRepository
-import org.gradle.api.file.Directory
 import org.gradle.api.plugins.JavaPluginExtension
 import org.gradle.api.publish.PublishingExtension
 import org.gradle.api.publish.maven.MavenPublication
 import org.gradle.api.publish.maven.plugins.MavenPublishPlugin
 import org.gradle.api.tasks.bundling.Jar
-import org.gradle.internal.impldep.bsh.commands.dir
 import org.gradle.plugins.signing.SigningExtension
 import org.gradle.plugins.signing.SigningPlugin
 import java.io.File
 import java.io.FileNotFoundException
-import java.lang.RuntimeException
-import java.security.Provider
 import java.time.LocalDateTime
 
 
@@ -108,7 +104,7 @@ class UploaderPlugin : Plugin<Project> {
         project.task("2.uploadDeploymentDir") {
             if(!configuredManually) {
                 it.group = "sonatypeUploader"
-                it.dependsOn("1.createDeploymentDir")
+                it.dependsOn("configureUploader")
             }
             it.description = "上传组合好的目录到sonatype"
             it.doLast {
@@ -122,11 +118,6 @@ class UploaderPlugin : Plugin<Project> {
                         }
                     }else{
                         tempRepo
-//                        extension.repositoryPath?.let{
-//                            extension.repositoryPath
-//                        }?: run{
-//                            tempRepo
-//                        }
                     }
                 )
                 if (dir.exists()) {
@@ -144,6 +135,7 @@ class UploaderPlugin : Plugin<Project> {
                     val uid = Utils.uploadFile(zipFilePath, url, authToken)
                     System.setProperty("uploaderId", uid)
                     Utils.writeToFile("${File(zipFilePath).parent}/uploaderId", uid)
+                    Utils.appendToFile(project.layout.buildDirectory.dir("tmp/sonayUploader/history").get().asFile.path, "$uid $bundleName")
                 } else {
                     throw FileNotFoundException("The artifact dir not found: $dir")
                 }
@@ -248,12 +240,18 @@ class UploaderPlugin : Plugin<Project> {
                     val url = "https://central.sonatype.com/api/v1/publisher/status?id=$uid"
                     val authToken = Utils.getAuthToken(extension)
                     val status = Utils.checkUploadStatus(url, authToken)
-                    if(!status.endsWith("ING") && !status.endsWith("ED")){
+                    if(!listOf("PENDING", "VALIDATING", "VALIDATED", "PUBLISHING", "PUBLISHED").contains(status)){
                         throw RuntimeException("[Result] Status $status\nFor detail: https://central.sonatype.com/publishing/deployments")
                     }
                 } ?: run {
                     throw RuntimeException("You need to upload firstly")
                 }
+            }
+        }
+        project.tasks.register("generateSonatypeAuthToken"){
+            it.doLast {
+                val token = Utils.getAuthToken(extension)
+                println("Authorization: Bearer $token")
             }
         }
     }
