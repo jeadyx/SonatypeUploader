@@ -23,6 +23,8 @@ class UploaderPlugin : Plugin<Project> {
         val hasMavenPublishPlugin = project.plugins.hasPlugin(MavenPublishPlugin::class.java)
         val hasSigningPlugin = project.plugins.hasPlugin(SigningPlugin::class.java)
         val configuredManually = hasMavenPublishPlugin && hasSigningPlugin
+        val hasAndroidPlugin = project.plugins.hasPlugin("android-library")
+        val hasJavaPlugin = project.plugins.hasPlugin("java-library")
         if(hasDokkaPlugin){
             project.tasks.register("dokkaJavadocJar", Jar::class.java) {
                 it.description = "generate javadoc, kotlin as java doc"
@@ -34,15 +36,29 @@ class UploaderPlugin : Plugin<Project> {
         if(!hasMavenPublishPlugin){
             project.plugins.apply(MavenPublishPlugin::class.java)
             project.extensions.configure(PublishingExtension::class.java){
-                it.publications.create("mavenJava", MavenPublication::class.java){
-                    it.from(project.components.getByName("java"))
-                    if(hasDokkaPlugin) {
-                        it.artifact(project.tasks.named("dokkaJavadocJar"))
+                if(hasJavaPlugin) {
+                    it.publications.create("mavenJava", MavenPublication::class.java) {
+                        it.from(project.components.getByName("java"))
+                        if (hasDokkaPlugin) {
+                            it.artifact(project.tasks.named("dokkaJavadocJar"))
+                        }
                     }
                 }
                 it.repositories.maven {
                     it.name = "sonayUploader"
                     it.url = project.uri(tempRepo)
+                }
+
+                if(hasAndroidPlugin) {
+                    it.publications.create("mavenAndroid", MavenPublication::class.java) {
+                        it.artifact(
+                            project.layout.buildDirectory.dir("outputs/aar/${project.name}-release.aar")
+                                .get().asFile.path
+                        )
+                        if (hasDokkaPlugin) {
+                            it.artifact(project.tasks.named("dokkaJavadocJar"))
+                        }
+                    }
                 }
             }
         }
@@ -50,6 +66,11 @@ class UploaderPlugin : Plugin<Project> {
             project.plugins.apply(SigningPlugin::class.java)
             project.extensions.configure(SigningExtension::class.java){
                 it.sign(project.extensions.getByType(PublishingExtension::class.java).publications)
+            }
+            if(hasAndroidPlugin){
+                project.tasks.named("signMavenAndroidPublication").configure{
+                    it.dependsOn("bundleReleaseAar")
+                }
             }
         }
         if(project.plugins.hasPlugin("java-library")){
@@ -143,6 +164,7 @@ class UploaderPlugin : Plugin<Project> {
         }
         if(!configuredManually) {
             val configureUploaderTask = project.task("configureUploader"){
+                it.dependsOn("assemble")
                 it.doLast {
                     extension.repositoryPath?.let{root->
                         val fileRepo = File(root)
@@ -166,10 +188,18 @@ class UploaderPlugin : Plugin<Project> {
                     }
                     project.extensions.configure(PublishingExtension::class.java) {
                         extension.pom?.let { pom ->
-                            it.publications.named("mavenJava", MavenPublication::class.java)
-                                .configure { publication ->
-                                    pom.execute(publication.pom)
-                                }
+                            if(hasJavaPlugin) {
+                                it.publications.named("mavenJava", MavenPublication::class.java)
+                                    .configure { publication ->
+                                        pom.execute(publication.pom)
+                                    }
+                            }
+                            if(hasAndroidPlugin){
+                                it.publications.named("mavenAndroid", MavenPublication::class.java)
+                                    .configure { publication ->
+                                        pom.execute(publication.pom)
+                                    }
+                            }
                         }
                         it.repositories.named("sonayUploader", MavenArtifactRepository::class.java) {
                             it.url = project.uri(tempRepo)
@@ -191,7 +221,8 @@ class UploaderPlugin : Plugin<Project> {
                 it.group = "sonatypeUploader"
                 it.description = "组合为sonatype可接受的目录树"
                 it.dependsOn("configureUploader", "cleanLocalDeploymentDir")
-                it.dependsOn("assemble", "publishMavenJavaPublicationToSonayUploaderRepository")
+                if(hasJavaPlugin) it.dependsOn("publishMavenJavaPublicationToSonayUploaderRepository")
+                if(hasAndroidPlugin) it.dependsOn("publishMavenAndroidPublicationToSonayUploaderRepository")
                 it.doLast{
                     println("Created to path: $tempRepo")
                 }

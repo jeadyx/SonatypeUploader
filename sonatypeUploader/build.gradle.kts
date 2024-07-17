@@ -6,7 +6,7 @@ plugins {
     id("org.jetbrains.dokka") version "1.9.20" apply false
 }
 group = "io.github.jeadyx"
-version = "2.6"
+version = "2.7"
 gradlePlugin {
     website.set("https://github.com/jeadyx/SonatypeUploader")
     vcsUrl.set("https://github.com/jeadyx/SonatypeUploader")
