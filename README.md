@@ -10,7 +10,7 @@ The script is base on `build.gradle.kts`, you can reference the sample project i
 plugins {    
     `maven-publish`
     signing
-    id("io.github.jeadyx.sonatype-uploader") version "2.6"
+    id("io.github.jeadyx.sonatype-uploader") version "2.7"
 }
 
 sonatypeUploader {
@@ -25,7 +25,7 @@ sonatypeUploader {
 ```kotlin
 plugins {
    id("org.jetbrains.dokka") version "1.9.20" // add this line when you using kotlin project else comment it
-   id("io.github.jeadyx.sonatype-uploader") version "2.6"
+   id("io.github.jeadyx.sonatype-uploader") version "2.7"
 }
 group = "io.github.test"
 version = "1.4"
@@ -70,7 +70,7 @@ sonatypeUploader {
 import io.github.jeadyx.UploaderSigning
 plugins {
     id("org.jetbrains.dokka") version "1.9.20"
-    id("io.github.jeadyx.sonatype-uploader") version "2.6"
+    id("io.github.jeadyx.sonatype-uploader") version "2.7"
 }
 
 group = "io.github.test"
