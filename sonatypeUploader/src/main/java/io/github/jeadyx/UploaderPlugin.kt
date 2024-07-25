@@ -48,7 +48,6 @@ class UploaderPlugin : Plugin<Project> {
                     it.name = "sonayUploader"
                     it.url = project.uri(tempRepo)
                 }
-
                 if(hasAndroidPlugin) {
                     it.publications.create("mavenAndroid", MavenPublication::class.java) {
                         it.artifact(
@@ -59,6 +58,9 @@ class UploaderPlugin : Plugin<Project> {
                             it.artifact(project.tasks.named("dokkaJavadocJar"))
                         }
                     }
+                }
+                project.tasks.named("publishToMavenLocal").configure{
+                    it.dependsOn("configureUploader")
                 }
             }
         }
