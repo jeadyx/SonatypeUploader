@@ -10,7 +10,7 @@ The script is base on `build.gradle.kts`, you can reference the sample project i
 plugins {    
     `maven-publish`
     signing
-    id("io.github.jeadyx.sonatype-uploader") version "2.7"
+    id("io.github.jeadyx.sonatype-uploader") version "2.8"
 }
 
 sonatypeUploader {
@@ -25,7 +25,7 @@ sonatypeUploader {
 ```kotlin
 plugins {
    id("org.jetbrains.dokka") version "1.9.20" // add this line when you using kotlin project else comment it
-   id("io.github.jeadyx.sonatype-uploader") version "2.7"
+   id("io.github.jeadyx.sonatype-uploader") version "2.8"
 }
 group = "io.github.test"
 version = "1.4"
@@ -70,7 +70,7 @@ sonatypeUploader {
 import io.github.jeadyx.UploaderSigning
 plugins {
     id("org.jetbrains.dokka") version "1.9.20"
-    id("io.github.jeadyx.sonatype-uploader") version "2.7"
+    id("io.github.jeadyx.sonatype-uploader") version "2.8"
 }
 
 group = "io.github.test"
@@ -108,6 +108,13 @@ sonatypeUploader {
             connection = "scm:git:git://example.com/my-library.git"
             developerConnection = "scm:git:ssh://example.com/my-library.git"
             url = "http://example.com/my-library/"
+        }
+        withXml {
+            val dependenciesNode = asNode().appendNode("dependencies")
+            val dependencyNode = dependenciesNode.appendNode("dependency")
+            dependencyNode.appendNode("groupId", "com.test.groupId")
+            dependencyNode.appendNode("artifactId", "artifactId")
+            dependencyNode.appendNode("version", "1.0")
         }
     }
 }
